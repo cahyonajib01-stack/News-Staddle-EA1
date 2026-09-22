@@ -1,1 +1,63 @@
+name: Compile MT5 EA
 
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "News_Straddle_EA.mq5"
+
+jobs:
+  compile:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check source
+        shell: powershell
+        run: |
+          if (!(Test-Path ".\News_Straddle_EA.mq5")) {
+            throw "News_Straddle_EA.mq5 tidak ditemukan"
+          }
+          Write-Host "EA ditemukan."
+
+      - name: Find MetaEditor
+        shell: powershell
+        run: |
+          Write-Host "Mencari MetaEditor..."
+          $editor = Get-ChildItem `
+            -Path "$env:LOCALAPPDATA","C:\Program Files","C:\Program Files (x86)" `
+            -Filter "metaeditor64.exe" `
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (!$editor) {
+            throw "MetaEditor tidak ditemukan."
+          }
+
+          Write-Host "MetaEditor ditemukan: $editor"
+          "METAEDITOR=$editor" >> $env:GITHUB_ENV
+
+      - name: Compile EA
+        shell: powershell
+        run: |
+          $source = (Resolve-Path ".\News_Straddle_EA.mq5").Path
+          Write-Host "Compile: $source"
+
+          & "$env:METAEDITOR" "/compile:$source" "/log"
+
+          $ex5 = Join-Path (Split-Path $source) "News_Straddle_EA.ex5"
+
+          if (!(Test-Path $ex5)) {
+            throw "Compile gagal. EX5 tidak terbentuk."
+          }
+
+          Write-Host "Compile berhasil."
+
+      - name: Upload EX5
+        uses: actions/upload-artifact@v4
+        with:
+          name: News_Straddle_EA_compiled
+          path: News_Straddle_EA.ex5
